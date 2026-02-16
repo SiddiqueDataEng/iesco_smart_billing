@@ -209,7 +209,7 @@ consumer_summary = pd.read_parquet('./iesco_gold_data/agg_consumer_type_summary.
 
 ## Support
 
-For issues or questions, refer to the documentation files or check the `extra/` folder for debug scripts and archived files.
+For issues or questions: Muhammad Siddique +92 331 5868725
 
 ## License
 
