@@ -1,273 +1,98 @@
-"""
-IESCO Smart Billing Analytics Dashboard
-========================================
-Multi-page Streamlit dashboard for comprehensive analytics and ML models
-"""
+"""City Energy Observatory dashboard."""
 
 import streamlit as st
-import pandas as pd
-import numpy as np
-from pathlib import Path
+import plotly.express as px
 
-# Page configuration
-st.set_page_config(
-    page_title="IESCO Analytics Dashboard",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
+from utils.city_energy import (
+    build_kpis,
+    load_source_data,
+    monthly_consumption,
+    quality_summary,
+    standardize_meters,
+    standardize_readings,
 )
 
-# Custom CSS
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        text-align: center;
-        padding: 1rem;
-        background: linear-gradient(90deg, #e3f2fd 0%, #bbdefb 100%);
-        border-radius: 10px;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #1f77b4;
-    }
-    .stMetric {
-        background-color: white;
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-</style>
-""", unsafe_allow_html=True)
 
-# Main header
-st.markdown('<div class="main-header">⚡ IESCO Smart Billing Analytics Dashboard</div>', unsafe_allow_html=True)
-
-# Sidebar navigation
-st.sidebar.title("📊 Navigation")
-st.sidebar.markdown("---")
-
-# Page categories
-page_category = st.sidebar.radio(
-    "Select Category:",
-    ["🏠 Home", "📈 Analytics", "🤖 ML Models", "🗺️ Geospatial", "⚙️ Operations"]
+st.set_page_config(page_title="City Energy Observatory", page_icon="⚡", layout="wide")
+st.markdown(
+    """
+    <style>
+    .main-header { font-size: 2.4rem; font-weight: 700; color: #12343b; }
+    .subtle { color: #547078; font-size: 1.05rem; }
+    [data-testid="stMetric"] { border-top: 3px solid #e07a5f; padding-top: .6rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown('<div class="main-header">City Energy Observatory</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="subtle">Collect, standardize, analyze, and visualize urban energy data.</div>',
+    unsafe_allow_html=True,
 )
 
-# Initialize session state for data caching
-if 'data_loaded' not in st.session_state:
-    st.session_state.data_loaded = False
-    st.session_state.gold_path = "./iesco_gold_data"
+with st.sidebar:
+    st.header("Data catalog")
+    city = st.selectbox("City", ["Reference dataset", "City 2", "City 3", "City 4"])
+    view = st.radio("View", ["Overview", "Data quality", "Catalog readiness"])
+    st.caption("The checked-in IESCO extract is the reference source. Every new connector should publish the same canonical tables.")
 
-# Data loading function
+
 @st.cache_data
-def load_gold_data():
-    """Load all Gold Layer tables"""
-    gold_path = Path("./iesco_gold_data")
-    
-    if not gold_path.exists():
-        st.error(f"Gold Layer data not found at {gold_path}")
+def load_reference_data():
+    source = load_source_data()
+    if "meters" not in source or "readings" not in source:
         return None
-    
-    data = {}
-    try:
-        # Load dimension tables
-        data['dim_meter'] = pd.read_parquet(gold_path / "dim_meter.parquet")
-        data['dim_date'] = pd.read_parquet(gold_path / "dim_date.parquet")
-        data['dim_time'] = pd.read_parquet(gold_path / "dim_time.parquet")
-        data['dim_consumer_type'] = pd.read_parquet(gold_path / "dim_consumer_type.parquet")
-        data['dim_location'] = pd.read_parquet(gold_path / "dim_location.parquet")
-        
-        # Load fact tables
-        data['fact_readings'] = pd.read_parquet(gold_path / "fact_readings.parquet")
-        data['fact_bills'] = pd.read_parquet(gold_path / "fact_bills.parquet")
-        data['fact_payments'] = pd.read_parquet(gold_path / "fact_payments.parquet")
-        
-        # Load aggregate tables
-        data['agg_monthly'] = pd.read_parquet(gold_path / "agg_monthly_consumption.parquet")
-        data['agg_daily'] = pd.read_parquet(gold_path / "agg_daily_consumption.parquet")
-        data['agg_consumer_type'] = pd.read_parquet(gold_path / "agg_consumer_type_summary.parquet")
-        data['agg_payment'] = pd.read_parquet(gold_path / "agg_payment_summary.parquet")
-        data['agg_location'] = pd.read_parquet(gold_path / "agg_location_summary.parquet")
-        
-        return data
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None
+    return standardize_meters(source["meters"]), standardize_readings(source["readings"])
 
-# Home Page
-if page_category == "🏠 Home":
-    st.header("Welcome to IESCO Analytics Dashboard")
-    
-    st.markdown("""
-    ### 📊 Comprehensive Analytics & ML Platform
-    
-    This dashboard provides advanced analytics and machine learning capabilities for IESCO smart billing data.
-    
-    #### 🎯 Key Features:
-    """)
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        **📈 Analytics**
-        - Billing Accuracy Analysis
-        - Grid Stability Monitoring
-        - Consumer Segmentation
-        - Data Quality Tracking
-        - Performance Analytics
-        """)
-    
-    with col2:
-        st.markdown("""
-        **🤖 ML Models**
-        - Load Forecasting
-        - Tamper Detection
-        - Failure Prediction
-        - Churn Analysis
-        - Upgrade Prediction
-        """)
-    
-    with col3:
-        st.markdown("""
-        **🗺️ Geospatial**
-        - Regional Analysis
-        - Infrastructure Planning
-        - Capacity Planning
-        - Zone-wise Forecasting
-        - Solar Impact Study
-        """)
-    
-    st.markdown("---")
-    
-    # Load and display summary statistics
-    with st.spinner("Loading data..."):
-        data = load_gold_data()
-    
-    if data:
-        st.success("✅ Data loaded successfully!")
-        
-        st.subheader("📊 Data Summary")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Meters", f"{len(data['dim_meter']):,}")
-        
-        with col2:
-            st.metric("Total Readings", f"{len(data['fact_readings']):,}")
-        
-        with col3:
-            st.metric("Total Bills", f"{len(data['fact_bills']):,}")
-        
-        with col4:
-            st.metric("Consumer Types", f"{len(data['dim_consumer_type']):,}")
-        
-        st.markdown("---")
-        
-        # Quick insights
-        st.subheader("🔍 Quick Insights")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Top 5 Consumer Types by Consumption**")
-            top_consumers = data['agg_consumer_type'].nlargest(5, 'total_consumption_kwh')
-            st.dataframe(
-                top_consumers[['consumer_type', 'total_consumption_kwh', 'meter_count']],
-                hide_index=True
-            )
-        
-        with col2:
-            st.markdown("**Payment Status Distribution**")
-            payment_dist = data['agg_payment'].groupby('payment_status')['payment_count'].sum()
-            st.bar_chart(payment_dist)
-        
-        st.markdown("---")
-        st.info("👈 Use the sidebar to navigate to different analytics and ML modules")
 
-# Analytics Pages
-elif page_category == "📈 Analytics":
-    page = st.sidebar.selectbox(
-        "Select Analytics Module:",
+data = load_reference_data()
+if data is None:
+    st.error("No meter and reading extracts were found. Add meters_*.csv and readings_*.csv or run an ingestion connector.")
+    st.stop()
+
+meters, readings = data
+kpis = build_kpis(meters, readings)
+
+if view == "Overview":
+    st.caption(f"{city} | canonical energy observations | source: CSV reference extract")
+    columns = st.columns(4)
+    columns[0].metric("Meters", f"{kpis['meter_count']:,}")
+    columns[1].metric("Consumption", f"{kpis['consumption_kwh']:,.0f} kWh")
+    columns[2].metric("Readings", f"{kpis['reading_count']:,}")
+    columns[3].metric("Quality rate", f"{kpis['quality_rate']:.1f}%")
+
+    monthly = monthly_consumption(readings)
+    if not monthly.empty:
+        st.subheader("Consumption trend")
+        st.plotly_chart(
+            px.line(monthly, x="year_month", y="consumption_kwh", markers=True, labels={"year_month": "Month", "consumption_kwh": "kWh"}),
+            use_container_width=True,
+        )
+    left, right = st.columns(2)
+    with left:
+        st.subheader("Asset footprint")
+        asset_columns = [column for column in ["meter_number", "district", "division", "latitude", "longitude", "status"] if column in meters]
+        st.dataframe(meters[asset_columns], hide_index=True, use_container_width=True)
+    with right:
+        st.subheader("Latest observations")
+        st.dataframe(readings.sort_values("timestamp", ascending=False).head(12), hide_index=True, use_container_width=True)
+elif view == "Data quality":
+    st.subheader("Data quality monitor")
+    st.dataframe(quality_summary(readings), hide_index=True, use_container_width=True)
+    st.metric("Retained observations", f"{kpis['reading_count']:,}")
+else:
+    st.subheader("Four-city integration catalog")
+    st.dataframe(
         [
-            "Billing Accuracy",
-            "Grid Stability Analysis",
-            "Consumer Segmentation",
-            "Data Quality Monitoring",
-            "Meter Lifecycle Analysis",
-            "Solar Integration Impact",
-            "Tariff Change Impact",
-            "District Performance"
-        ]
+            {"city": "Reference dataset", "source": "CSV extract", "cadence": "Daily or monthly", "status": "Available"},
+            {"city": "City 2", "source": "REST API", "cadence": "To configure", "status": "Connector pending"},
+            {"city": "City 3", "source": "Object storage", "cadence": "To configure", "status": "Connector pending"},
+            {"city": "City 4", "source": "Data Catalog upload", "cadence": "To configure", "status": "Connector pending"},
+        ],
+        hide_index=True,
+        use_container_width=True,
     )
-    
-    st.header(f"📈 {page}")
-    st.info(f"Loading {page} module...")
-    st.markdown(f"**Module**: `pages/analytics/{page.lower().replace(' ', '_')}.py`")
+    st.info("Connectors must emit canonical meter, reading, location, and metadata contracts before loading PostgreSQL.")
 
-# ML Models Pages
-elif page_category == "🤖 ML Models":
-    page = st.sidebar.selectbox(
-        "Select ML Model:",
-        [
-            "Load Forecasting",
-            "Tamper Detection",
-            "Transformer Upgrade Prediction",
-            "Churn Analysis",
-            "Failure Pattern Analysis",
-            "Replacement Optimization",
-            "New Connection Forecasting",
-            "Seasonal Capacity Planning"
-        ]
-    )
-    
-    st.header(f"🤖 {page}")
-    st.info(f"Loading {page} module...")
-    st.markdown(f"**Module**: `pages/ml_models/{page.lower().replace(' ', '_')}.py`")
-
-# Geospatial Pages
-elif page_category == "🗺️ Geospatial":
-    page = st.sidebar.selectbox(
-        "Select Geospatial Module:",
-        [
-            "Regional Consumption Forecasting",
-            "Infrastructure Planning",
-            "Solar Impact Study",
-            "Zone-wise Growth Analysis",
-            "Geospatial Heatmaps"
-        ]
-    )
-    
-    st.header(f"🗺️ {page}")
-    st.info(f"Loading {page} module...")
-    st.markdown(f"**Module**: `pages/geospatial/{page.lower().replace(' ', '_')}.py`")
-
-# Operations Pages
-elif page_category == "⚙️ Operations":
-    page = st.sidebar.selectbox(
-        "Select Operations Module:",
-        [
-            "ETL Pipeline Monitor",
-            "Data Warehouse Status",
-            "System Health Dashboard"
-        ]
-    )
-    
-    st.header(f"⚙️ {page}")
-    st.info(f"Loading {page} module...")
-    st.markdown(f"**Module**: `pages/operations/{page.lower().replace(' ', '_')}.py`")
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-<div style='text-align: center; color: #666; font-size: 0.8rem;'>
-    <p>IESCO Smart Billing Analytics</p>
-    <p>Version 2.0</p>
-</div>
-""", unsafe_allow_html=True)
+st.divider()
+st.caption("Pipeline: source connectors -> Airflow -> validation -> PostgreSQL -> Superset / Streamlit")
